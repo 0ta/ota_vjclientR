@@ -8,6 +8,7 @@ namespace ota.ndi
     sealed class FormatConverter : System.IDisposable
     {
         private ComputeBuffer _encoderOutput;
+        
         private ComputeShader _encoderCompute;
 
         public FormatConverter(ComputeShader encoderCompute)

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: df6b888282f804d9f9eda229ceb8dc74
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - _encodeCompute: {fileID: 7200000, guid: bb6d0f65459cb2c4ba0ea51b5e24728d, type: 3}
+  - _frameTextureSourceContainer: {instanceID: 0}
+  - _preview: {instanceID: 0}
+  - _tmppreview: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

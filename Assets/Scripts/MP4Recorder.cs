@@ -46,6 +46,7 @@ namespace ota.ndi
         ARCameraManager m_CameraManager;
 
         [Space]
+
         [SerializeField] float _minDepth = 0.2f;
 
         [SerializeField] float _maxDepth = 3.2f;
@@ -88,35 +89,14 @@ namespace ota.ndi
 
         private BgMetadataManager _bgmetadatamanager;
 
-        private string _ndiName = "ARKit NDI Sender";
         // Start is called before the first frame update
         void Start()
         {
-            //WifiManager.Instance.SetupNetwork();
-
-            if (!NDIlib.Initialize())
-            {
-                Debug.Log("NDIlib can't be initialized.");
-                return;
-            }
-
             _formatConverter = new FormatConverter(_encodeCompute);
-
-            IntPtr nname = Marshal.StringToHGlobalAnsi(_ndiName);
-            NDIlib.send_create_t sendSettings = new NDIlib.send_create_t { p_ndi_name = nname };
-            _sendInstance = NDIlib.send_create(ref sendSettings);
-            Marshal.FreeHGlobal(nname);
-
-            if (_sendInstance == IntPtr.Zero)
-            {
-                Debug.LogError("NDI can't create a send instance.");
-                return;
-            }
-
             _muxMaterial = new Material(_shader);
             _senderRT = new RenderTexture(1920, 1440, 0);
+            //_senderRT = new RenderTexture(1920, 1080, 0);
             _senderRT.Create();
-
             _bgmetadatamanager = new BgMetadataManager();
         }
 
@@ -143,12 +123,6 @@ namespace ota.ndi
         {
             Destroy(_muxMaterial);
             Destroy(_senderRT);
-            if (_sendInstance != IntPtr.Zero)
-            {
-                NDIlib.send_destroy(_sendInstance);
-                _sendInstance = IntPtr.Zero;
-            }
-
             if (_nativeArray != null)
             {
                 _nativeArray.Value.Dispose();
@@ -172,7 +146,7 @@ namespace ota.ndi
             }
 
             // [Debug用]Previewに格納
-            _depthPreview.texture = _sourceDepthTexture;
+            //_depthPreview.texture = _sourceDepthTexture;
             _stencilPreview.texture = _sourceStencilTexture;
         }
 
@@ -181,9 +155,6 @@ namespace ota.ndi
             float minDimension = 500.0f;
             float maxDimension = Mathf.Round(minDimension * textureAspectRatio);
             Vector2 rectSize = new Vector2(maxDimension, minDimension);
-
-            // Determine the raw image material and maxDistance material parameter based on the display mode.
-            // DepthMaterialがなにやっているか不明。。。とりあえず無視。
 
             // Update the raw image dimensions and the raw image material parameters.
             _depthPreview.rectTransform.sizeDelta = rectSize;
@@ -196,65 +167,26 @@ namespace ota.ndi
             //1. CreateCameraFeedTexture
             RefreshCameraFeedTexture();
 
-            //2. Meke XML for Metadata used by NDI connection
-            makeXML4Metadata(cameraFrameEventArgs);
+            // //2. Meke XML for Metadata used by NDI connection
+            // makeXML4Metadata(cameraFrameEventArgs);
 
-            //3. Create UYVA image
-            ComputeBuffer converted = Capture();
-            if (converted == null)
-            {
-                return;
-            }
+            // //3. Create UYVA image
+            // ComputeBuffer converted = Capture();
+            // if (converted == null)
+            // {
+            //     return;
+            // }
 
-            //4. Send Image via NDI
-            SendVideo(converted);
+            // //4. Send Image via NDI
+            // SendVideo(converted);
 
-            //5. Meke XML for BG verices related Metadata used by NDI connection
-            if (_otavjMeshManager.m_MeshMap.Count == 0) return;
-            var isSend = makeXML4BgMetadata();
+            // //5. Meke XML for BG verices related Metadata used by NDI connection
+            // if (_otavjMeshManager.m_MeshMap.Count == 0) return;
+            // var isSend = makeXML4BgMetadata();
 
-            //6. Send Metadata via NDI
-            if (!isSend) return;
-            SendMetadata();
-        }
-
-        private void makeXML4Metadata(ARCameraFrameEventArgs args)
-        {
-            if (args.projectionMatrix.HasValue)
-            {
-                _projection = args.projectionMatrix.Value;
-
-                // Aspect ratio compensation (camera vs. 16:9)
-                //_projection[1, 1] *= (16.0f / 9) / _camera.aspect;
-            }
-
-            MetadataInfo metainfo = new MetadataInfo(_arcamera.transform.position, _arcamera.transform.rotation, _projection, _minDepth, _maxDepth, _inputHandler.GetToggles(), _inputHandler.GetSliders());
-            String jsonString = JsonConvert.SerializeObject(metainfo);
-            JsonConvert.SerializeObject(metainfo);
-            _metadataStr = $"<metadata><![CDATA[{jsonString}]]></metadata>";
-            //Debug.Log(_metadataStr);
-        }
-
-
-        private bool makeXML4BgMetadata()
-        {
-            if (_bgmetadatamanager.SentMeshMap == null)
-            {
-                _bgmetadatamanager.InitializeManager(_otavjMeshManager.m_MeshMap);
-                return false;
-            }
-            var bgmeshinfo = _bgmetadatamanager.getDeltaVerticesInfo(_otavjMeshManager.m_MeshMap);
-            var deletedMesh = _bgmetadatamanager.getDeletedMeshList(_otavjMeshManager.m_MeshMap);
-            if (bgmeshinfo.Count == 0 && deletedMesh.Count == 0)
-            {
-                return false;
-            }
-            BgMetadataInfo metainfo = new BgMetadataInfo(bgmeshinfo, deletedMesh);
-            String jsonString = JsonConvert.SerializeObject(metainfo);
-            
-            _metadataStr4bg = $"<metadata><![CDATA[{jsonString}]]></metadata>";
-            //Debug.Log(_metadataStr4bg);
-            return true;
+            // //6. Send Metadata via NDI
+            // if (!isSend) return;
+            // SendMetadata();
         }
 
         unsafe private void RefreshCameraFeedTexture()
@@ -295,6 +227,48 @@ namespace ota.ndi
             _muxMaterial.SetVector("_DepthRange", range);
             _senderRT.Release();
             Graphics.Blit(null, _senderRT, _muxMaterial, 0);
+
+            // test
+            //Camera.main.targetTexture = _senderRT;
+            _depthPreview.texture = _senderRT;
+        }
+        private void makeXML4Metadata(ARCameraFrameEventArgs args)
+        {
+            if (args.projectionMatrix.HasValue)
+            {
+                _projection = args.projectionMatrix.Value;
+
+                // Aspect ratio compensation (camera vs. 16:9)
+                //_projection[1, 1] *= (16.0f / 9) / _camera.aspect;
+            }
+
+            MetadataInfo metainfo = new MetadataInfo(_arcamera.transform.position, _arcamera.transform.rotation, _projection, _minDepth, _maxDepth, _inputHandler.GetToggles(), _inputHandler.GetSliders());
+            String jsonString = JsonConvert.SerializeObject(metainfo);
+            JsonConvert.SerializeObject(metainfo);
+            _metadataStr = $"<metadata><![CDATA[{jsonString}]]></metadata>";
+            //Debug.Log(_metadataStr);
+        }
+
+
+        private bool makeXML4BgMetadata()
+        {
+            if (_bgmetadatamanager.SentMeshMap == null)
+            {
+                _bgmetadatamanager.InitializeManager(_otavjMeshManager.m_MeshMap);
+                return false;
+            }
+            var bgmeshinfo = _bgmetadatamanager.getDeltaVerticesInfo(_otavjMeshManager.m_MeshMap);
+            var deletedMesh = _bgmetadatamanager.getDeletedMeshList(_otavjMeshManager.m_MeshMap);
+            if (bgmeshinfo.Count == 0 && deletedMesh.Count == 0)
+            {
+                return false;
+            }
+            BgMetadataInfo metainfo = new BgMetadataInfo(bgmeshinfo, deletedMesh);
+            String jsonString = JsonConvert.SerializeObject(metainfo);
+            
+            _metadataStr4bg = $"<metadata><![CDATA[{jsonString}]]></metadata>";
+            //Debug.Log(_metadataStr4bg);
+            return true;
         }
 
         private ComputeBuffer Capture()
