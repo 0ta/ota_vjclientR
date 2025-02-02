@@ -83,20 +83,47 @@ namespace ota.ndi
 
         private Matrix4x4 _projection;
 
+        private OtaFrameMetadata _metadata;
+
         private String _metadataStr;
 
         private String _metadataStr4bg;
 
         private BgMetadataManager _bgmetadatamanager;
 
-        // Start is called before the first frame update
+        public Options recordingOptions;
+
+        [System.Serializable]
+        public struct Options
+        {
+            [Min(640)]
+            public int width;
+            [Min(480)]
+            public int height;
+            [Range(10, 60)]
+            public int targetFrameRate;
+        }
+
+        public VideoRecorder recorder;
+
+        void Awake() {
+            //とりあえず決め打ちで初期化
+            recordingOptions = new Options
+            {
+                width = 1920,
+                height = 1440,
+                targetFrameRate = 60,
+            };
+        }
+
         void Start()
         {
             _formatConverter = new FormatConverter(_encodeCompute);
             _muxMaterial = new Material(_shader);
-            _senderRT = new RenderTexture(1920, 1440, 0);
+            _senderRT = new RenderTexture(recordingOptions.width, recordingOptions.width, 0);
             //_senderRT = new RenderTexture(1920, 1080, 0);
             _senderRT.Create();
+            recorder = new VideoRecorder(_senderRT, recordingOptions.targetFrameRate);
             _bgmetadatamanager = new BgMetadataManager();
         }
 
@@ -128,6 +155,7 @@ namespace ota.ndi
                 _nativeArray.Value.Dispose();
                 _nativeArray = null;
             }
+            recorder.Dispose();
         }
 
         private void Update()
@@ -164,12 +192,23 @@ namespace ota.ndi
 
         unsafe private void OnCameraFrameEventReceived(ARCameraFrameEventArgs cameraFrameEventArgs)
         {
+
             //1. CreateCameraFeedTexture
             RefreshCameraFeedTexture();
 
-            // //2. Meke XML for Metadata used by NDI connection
-            // makeXML4Metadata(cameraFrameEventArgs);
+            _metadata = new OtaFrameMetadata();
 
+            //2. Meke XML for Metadata used by NDI connection
+            makeXML4Metadata(cameraFrameEventArgs);
+
+            //3. Meke XML for BG verices related Metadata used by NDI connection
+            //if (_otavjMeshManager.m_MeshMap.Count == 0) return;
+            makeXML4BgMetadata();
+
+            //4. Record MP4
+            recordMP4();
+
+            
             // //3. Create UYVA image
             // ComputeBuffer converted = Capture();
             // if (converted == null)
@@ -242,129 +281,43 @@ namespace ota.ndi
                 //_projection[1, 1] *= (16.0f / 9) / _camera.aspect;
             }
 
-            MetadataInfo metainfo = new MetadataInfo(_arcamera.transform.position, _arcamera.transform.rotation, _projection, _minDepth, _maxDepth, _inputHandler.GetToggles(), _inputHandler.GetSliders());
-            String jsonString = JsonConvert.SerializeObject(metainfo);
-            JsonConvert.SerializeObject(metainfo);
-            _metadataStr = $"<metadata><![CDATA[{jsonString}]]></metadata>";
+            BasicMetadata metainfo = new BasicMetadata(_arcamera.transform.position, _arcamera.transform.rotation, _projection, _minDepth, _maxDepth, _inputHandler.GetToggles(), _inputHandler.GetSliders());
+            _metadata.camera = metainfo;
+
+            // String jsonString = JsonConvert.SerializeObject(metainfo);
+            // JsonConvert.SerializeObject(metainfo);
+            // _metadataStr = $"<metadata><![CDATA[{jsonString}]]></metadata>";
             //Debug.Log(_metadataStr);
         }
 
 
-        private bool makeXML4BgMetadata()
+        private void makeXML4BgMetadata()
         {
+            _metadata.background = null;
+            if (_otavjMeshManager.m_MeshMap.Count == 0) return;
             if (_bgmetadatamanager.SentMeshMap == null)
             {
                 _bgmetadatamanager.InitializeManager(_otavjMeshManager.m_MeshMap);
-                return false;
+                return;
             }
             var bgmeshinfo = _bgmetadatamanager.getDeltaVerticesInfo(_otavjMeshManager.m_MeshMap);
             var deletedMesh = _bgmetadatamanager.getDeletedMeshList(_otavjMeshManager.m_MeshMap);
             if (bgmeshinfo.Count == 0 && deletedMesh.Count == 0)
             {
-                return false;
+                return;
             }
-            BgMetadataInfo metainfo = new BgMetadataInfo(bgmeshinfo, deletedMesh);
-            String jsonString = JsonConvert.SerializeObject(metainfo);
+            BackgroundMetadata bgmetainfo = new BackgroundMetadata(bgmeshinfo, deletedMesh);
+            _metadata.background = bgmetainfo;
+
+            // String jsonString = JsonConvert.SerializeObject(metainfo);
             
-            _metadataStr4bg = $"<metadata><![CDATA[{jsonString}]]></metadata>";
+            // _metadataStr4bg = $"<metadata><![CDATA[{jsonString}]]></metadata>";
             //Debug.Log(_metadataStr4bg);
-            return true;
+            return;
         }
 
-        private ComputeBuffer Capture()
-        {
-            // #if !UNITY_EDITOR && UNITY_ANDROID
-            //             bool vflip = true;
-            // #else
-            //             bool vflip = false;
-            // #endif
-            // vflipはiOSの場合常にfalse
-            bool vflip = false;
-            _width = _senderRT.width;
-            _height = _senderRT.height;
-            ComputeBuffer converted = _formatConverter.Encode(_senderRT, _enableAlpha, vflip);
-            return converted;
+        private void recordMP4() {
+            recorder.Update(JsonConvert.SerializeObject(_metadata));
         }
-
-        private unsafe void SendVideo(ComputeBuffer buffer)
-        {
-            if (_nativeArray == null)
-            {
-                // for UYVY
-                int length = Utils.FrameDataCount(_width, _height, _enableAlpha) * 4;
-                // for RGB
-                //int length = _width * _height * 4;
-                _nativeArray = new NativeArray<byte>(length, Allocator.Persistent);
-                _bytes = new byte[length];
-            }
-            buffer.GetData(_bytes);
-            _nativeArray.Value.CopyFrom(_bytes);
-
-            void* pdata = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_nativeArray.Value);
-
-            // Data size verification
-            //if (_nativeArray.Value.Length / sizeof(uint) != Utils.FrameDataCount(_width, _height, _enableAlpha))
-            //{
-            //    return;
-            //}
-
-            // metadata test
-            //string stringA = "hello ota!!";
-            //string stringA = "<? xml version = \"1.0\" ?><PurchaseOrder PurchaseOrderNumber = \"99503\"></PurchaseOrder>";
-            //string stringA = "<PurchaseOrder PurchaseOrderNumber = \"99503\">test!!</PurchaseOrder>";
-            IntPtr pmetadata = Marshal.StringToHGlobalAnsi(_metadataStr);
-
-
-            // Frame data setup
-            var frame = new NDIlib.video_frame_v2_t
-            {
-                xres = _width,
-                yres = _height,
-                // for yuva
-                line_stride_in_bytes = _width * 2,
-                // for rgba
-                //line_stride_in_bytes = _width * 4,
-                frame_rate_N = _frameRateNumerator,
-                frame_rate_D = _frameRateDenominator,
-                // for yuva
-                FourCC = NDIlib.FourCC_type_e.FourCC_type_UYVA,
-                // for rgba
-                //FourCC = NDIlib.FourCC_type_e.FourCC_type_RGBA,
-                frame_format_type = NDIlib.frame_format_type_e.frame_format_type_progressive,
-                p_data = (IntPtr)pdata,
-                p_metadata = pmetadata
-                //p_metadata = IntPtr.Zero,
-            };
-
-            // Send via NDI
-            NDIlib.send_send_video_async_v2(_sendInstance, ref frame);
-
-            //後処理
-            //メモリーリークしているように見えない。。。何故に。。
-            //とりあえずコメントにしておく
-            //Marshal.FreeHGlobal(pmetadata);
-            //pmetadata = IntPtr.Zero;
-        }
-
-        private unsafe void SendMetadata()
-        {
-            IntPtr pmetadata = Marshal.StringToHGlobalAnsi(_metadataStr4bg);
-
-            var frame = new NDIlib.metadata_frame_t
-            {
-                length = 0,
-                p_data = (IntPtr)pmetadata
-            };
-
-            // Send via NDI
-            NDIlib.send_send_metadata_64(_sendInstance, ref frame);
-
-            //後処理
-            //メモリーリークしているように見えない。。。何故に。。
-            //とりあえずコメントにしておく
-            //Marshal.FreeHGlobal(pmetadata);
-            //pmetadata = IntPtr.Zero;
-        }
-
     }
 }
