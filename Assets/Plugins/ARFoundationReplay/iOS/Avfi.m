@@ -16,7 +16,7 @@ static AVAssetWriterInput* _writerMetadataInput;
 static AVAssetWriterInputMetadataAdaptor* _metadataAdaptor;
 static double _frameCount;
 
-extern void Avfi_StartRecordingUsingBookmark(const Byte *bookmark, int length, int width, int height)
+extern void Avfi_StartRecordingUsingBookmark(const char* fileName, const Byte *bookmark, int length, int width, int height)
 {
     NSLog(@"Using Bookmark");
     if (_writer)
@@ -29,7 +29,8 @@ extern void Avfi_StartRecordingUsingBookmark(const Byte *bookmark, int length, i
     NSError* err;
     
     NSURL* filePathURL = [[NSURL alloc] initByResolvingBookmarkData:bookmarkData options: NSURLBookmarkResolutionWithoutImplicitStartAccessing relativeToURL:nil bookmarkDataIsStale:false error:&err];
-    
+    filePathURL = [filePathURL URLByAppendingPathComponent:[NSString stringWithCString: fileName encoding:NSUTF8StringEncoding] isDirectory:false];
+
     if (err)
     {
         NSLog(@"Failed to Bookmark NSURL (%@)", err);

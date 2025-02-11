@@ -79,7 +79,8 @@ namespace ota.ndi
             //Marshal.Copy(bookmark, 0, unmanagedPnt, bookmark.Length);
             //Avfi.StartRecording(path, _source.width, _source.height);
              _timeManager.Clear();
-            Avfi.StartRecordingUsingBookmark(bookmark, size, _source.width, _source.height);
+            var fileName = GetFileName();
+            Avfi.StartRecordingUsingBookmark(fileName, bookmark, size, _source.width, _source.height);
             //Marshal.FreeHGlobal(unmanagedPnt);
             IsRecording = true;
             _frameCount = 0;
@@ -140,7 +141,6 @@ namespace ota.ndi
                 }
                 time = _timeManager.getTime(Encoding.UTF8.GetBytes(_metadata));
             }
-
             // Get pixel buffer
             using var pixelData = request.GetData<byte>(0);
             var pixelPtr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(pixelData);

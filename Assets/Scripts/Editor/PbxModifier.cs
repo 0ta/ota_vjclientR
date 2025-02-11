@@ -16,7 +16,7 @@ namespace ota.ndi.Editor
         {
             if (buildTarget == BuildTarget.iOS)
             {
-                ModifyProjectFile(path);
+                //ModifyProjectFile(path);
                 ModifyPlistFile(path);
             }
         }
@@ -61,6 +61,13 @@ namespace ota.ndi.Editor
                 var key = "NSLocalNetworkUsageDescription";
                 var desc = "NDI requires device discovery capability " +
                            "on the networks you use.";
+                if (!root.values.ContainsKey(key)) root.SetString(key, desc);
+            }
+
+            // Photo library usage description
+            {
+                var key = "NSPhotoLibraryAddUsageDescription";
+                var desc = "Taken movies could be saved into private photo library.";
                 if (!root.values.ContainsKey(key)) root.SetString(key, desc);
             }
 

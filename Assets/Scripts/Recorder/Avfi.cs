@@ -24,7 +24,7 @@ namespace ota.ndi
         public static extern void StartRecording(string filePath, int width, int height);
 
         [DllImport(DllName, EntryPoint = "Avfi_StartRecordingUsingBookmark")]
-        public static extern void StartRecordingUsingBookmark(byte[] bookmark, int length, int width, int height);
+        public static extern void StartRecordingUsingBookmark(string fileName, byte[] bookmark, int length, int width, int height);
 
         [DllImport(DllName, EntryPoint = "Avfi_AppendFrame")]
         public unsafe static extern void AppendFrame(
