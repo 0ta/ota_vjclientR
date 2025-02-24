@@ -120,7 +120,7 @@ namespace ota.ndi
         {
             _formatConverter = new FormatConverter(_encodeCompute);
             _muxMaterial = new Material(_shader);
-            _senderRT = new RenderTexture(recordingOptions.width, recordingOptions.width, 0);
+            _senderRT = new RenderTexture(recordingOptions.width, recordingOptions.height, 0);
             //_senderRT = new RenderTexture(1920, 1080, 0);
             _senderRT.Create();
             recorder = new VideoRecorder(_senderRT, recordingOptions.targetFrameRate);
